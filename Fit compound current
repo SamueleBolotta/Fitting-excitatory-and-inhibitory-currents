@@ -1,0 +1,102 @@
+clear
+
+% Membrane potential
+Vm = -5;
+
+% Level of noise
+l_n = 40;
+
+% Generate simulated data and add noise
+[EPSC,IPSC,CPSC,t] = generate_current(140,20,0,-70,Vm,0.2,8,1.5,3,60);
+
+% True values for comparison with fit
+True_values = {140,20,3,8,1.5,0.2};
+
+% Create table
+Table_True = cell2table(True_values,'VariableNames',{'Fun_Max conductance Chloride','Fun_Max conductance Glutamate', 'Fun_Tau Decay Ex', 'Fun_Tau decay In', 'Fun_Tau rise Ex', 'Fun_Tau rise In'});
+
+% Initial values for fitting
+gmc = 40; gmg = 80; tde = 0.2; tdi = 8; tre = 1.56; tri = 3;
+
+zmax = 70; % number of iterations
+
+%Preallocation
+final_Chl = zeros(1,zmax);
+final_Glu = zeros(1,zmax);
+final_tau_decay_ex = zeros(1,zmax);
+final_tau_decay_in = zeros(1,zmax);
+final_tau_rise_ex = zeros(1,zmax);
+final_tau_rise_in = zeros(1,zmax);
+
+% zmax iterations
+for z = 1:zmax
+    
+    %% Fit model to data
+    % Apply white noise to the CPSC
+    y = awgn(CPSC,l_n,'measured');
+    
+    %% Perform fit
+    [xData, yData] = prepareCurveData(t, y);
+    % Set up fittype and options.
+    ft = fittype( '((G_max_chl) .* ((1 - exp(-t / tau_rise_In)) .* exp(-t / tau_decay_In)) * (Vm - EChl)) + ((G_max_glu) .* ((1 - exp(-t / tau_rise_Ex)) .* exp(-t / tau_decay_Ex)) * (Vm - EGlu))', 'independent', 't', 'dependent', 'y' );
+    opts = fitoptions( 'Method', 'NonlinearLeastSquares', 'MaxIter', 5000);
+    opts.Display = 'notify';
+    
+    % At first iteration only, we plot what's going on to get an idea
+    if z == 1
+                
+        opts.Lower      = [-70 0 1   1   Vm 2.4 6.4 1.26 0.16];
+        opts.StartPoint = [-70 0 gmc gmg Vm tri tdi tre tde]; % Starting values
+        opts.Upper      = [-70 0 150 150 Vm 3.6 9.6 1.86 0.24];
+        
+        [fitresult1, gof1] = fit(xData, yData, ft, opts); % Fit
+        
+        %Store values
+        final_Chl(z) = fitresult1.G_max_chl;
+        final_Glu(z) = fitresult1.G_max_glu;
+        final_tau_decay_ex(z) = fitresult1.tau_decay_Ex;
+        final_tau_decay_in(z) = fitresult1.tau_decay_In;
+        final_tau_rise_ex(z) = fitresult1.tau_rise_Ex;
+        final_tau_rise_in(z) = fitresult1.tau_rise_In;
+        
+        % Plot the fit vs the true values
+        IPSC_fit = ((fitresult1.G_max_chl) .* ((1 - exp(-t / fitresult1.tau_rise_In)) .* exp(-t / fitresult1.tau_decay_In)) * (fitresult1.Vm - fitresult1.EChl));
+        EPSC_fit = ((fitresult1.G_max_glu) .* ((1 - exp(-t / fitresult1.tau_rise_Ex)) .* exp(-t / fitresult1.tau_decay_Ex)) * (fitresult1.Vm - fitresult1.EGlu));
+        CPSC_fit = IPSC_fit + EPSC_fit;
+        
+        plots
+        
+    else
+        
+        opts.Lower      = [-70 0 1   1   Vm 2.4 6.4 1.26 0.16];
+        opts.StartPoint = [-70 0 gmc gmg Vm tri tdi tre tde]; % Starting values
+        opts.Upper      = [-70 0 150 150 Vm 3.6 9.6 1.86 0.24];
+        
+        [fitresult1, gof1] = fit(xData, yData, ft, opts); % Fit
+        
+        % Store values
+        final_Chl(z) = fitresult1.G_max_chl;
+        final_Glu(z) = fitresult1.G_max_glu;
+        final_tau_decay_ex(z) = fitresult1.tau_decay_Ex;
+        final_tau_decay_in(z) = fitresult1.tau_decay_In;
+        final_tau_rise_ex(z) = fitresult1.tau_rise_Ex;
+        final_tau_rise_in(z) = fitresult1.tau_rise_In;
+    end
+end
+
+% Create table with fitting values for all iterations
+Table_Fit = table(final_Chl',final_Glu',final_tau_decay_ex',final_tau_decay_in',...
+    final_tau_rise_ex',final_tau_rise_in');
+
+Table_Fit.Properties.VariableNames = {'Max conductance Chloride','Max conductance Glutamate', 'Tau Decay Ex', 'Tau decay In', 'Tau rise Ex', 'Tau rise In'};
+
+% Stats
+func1 = @(x) mean(x);
+func2 = @(x) std(x);
+
+Table_Final(1,:) = varfun(func1,Table_Fit);
+Table_Final(2,:) = varfun(func2,Table_Fit);
+Table_Final = [Table_True;Table_Final];
+Table_Final.Properties.RowNames = {'True value','Mean','Std'};
+
+clear True_values z zmax Table_True
