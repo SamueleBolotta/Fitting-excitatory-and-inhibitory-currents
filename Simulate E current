@@ -1,0 +1,12 @@
+function [EPSC, t] = generate_E(G_max_glu, tau_rise_Ex, tau_decay_Ex, tmax)
+%% This function simulates an excitatory current.
+
+    dt = 0.1;                               % time step duration (ms)
+    t = 0:dt:tmax-dt;
+    Vm = -70;
+    EGlu = 0;
+
+    % Compute excitatory current    
+    EPSC = ((G_max_glu) .* ((1 - exp(-t / tau_rise_Ex)) .* exp(-t / tau_decay_Ex)) * (Vm - EGlu));
+    
+end
