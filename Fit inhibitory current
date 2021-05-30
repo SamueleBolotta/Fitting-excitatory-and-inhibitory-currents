@@ -1,0 +1,94 @@
+clear
+[IPSC, t] = generate_I(60, 0.2, 8, 120); % Generate simulated inhibitory current
+
+% Starting values
+Vm = 0;
+EChl = -70;
+EGlu = 0;
+
+True_values = {60, 0.2, 8}; % These are the "real" values we'll try to fit
+
+% Initial values for fitting
+gmc = 20; tdi = 5; tri = 1;
+
+zmax = 50; % number of iterations
+
+% Preallocation
+final_Chl = zeros(1,zmax);
+final_tau_decay_In = zeros(1,zmax);
+final_tau_rise_In = zeros(1,zmax);
+
+% 50 iterations 
+for z = 1:zmax
+    
+    %% Fit model to data
+    % Apply white noise to the CPSC - every time again, in order to have
+    % different values for the noise each iteration. You can change the
+    % number: the higher the number, the less the noise.
+    y = awgn(IPSC,5,'measured');
+    
+    %% Perform fit
+    [xData, yData] = prepareCurveData(t, y);
+    % Set up fittype and options.
+    ft = fittype( '((G_max_Chl) .* ((1 - exp(-t / tau_rise_In)) .* exp(-t / tau_decay_In)) * (Vm - EChl))', 'independent', 't', 'dependent', 'y' );
+    opts = fitoptions( 'Method', 'NonlinearLeastSquares', 'MaxIter', 5000);
+    opts.Display = 'notify';
+    
+    % Realistic values
+    if z == 1 % On the first iteration, we want to get a plot just to have an idea as to what's going on
+        opts.Lower      = [-70 1   0 1  0 ];
+        opts.StartPoint = [-70 gmc  0 tdi tri ]; % Starting values
+        opts.Upper      = [-70 150 0 20 5 ]; 
+        
+        [fitresult1, gof1(z)] = fit(xData, yData, ft, opts)
+        
+        final_Chl(z) = fitresult1.G_max_Chl;
+        final_tau_decay_In(z) = fitresult1.tau_decay_In;
+        final_tau_rise_In(z) = fitresult1.tau_rise_In;
+
+        % Plot the solution
+        IPSC_fit = ((fitresult1.G_max_Chl) .* ((1 - exp(-t / fitresult1.tau_rise_In)) .* exp(-t / fitresult1.tau_decay_In)) * (Vm - EChl));
+        
+        %% Plot fit with data
+        figure
+        plot(t,y)
+        hold on
+        plot(t,IPSC_fit)
+        title("Inhibitory current")
+        legend("Recorded","Fit")
+        
+    else % On every subsequent iteration, we add everything to the previous matrices we created
+        opts.Lower      = [-70 1   0 1  0 ];
+        opts.StartPoint = [-70 gmc  0 tdi tri ]; % Starting values
+        opts.Upper      = [-70 150 0 20 5 ]; 
+        
+        [fitresult1, gof1(z)] = fit(xData, yData, ft, opts)
+        
+        final_Chl(z) = fitresult1.G_max_Chl;
+        final_tau_decay_In(z) = fitresult1.tau_decay_In;
+        final_tau_rise_In(z) = fitresult1.tau_rise_In;
+    end
+end
+
+% Create one table for each case. Store values for all 20 iterations
+
+T1_f = table(final_Chl', final_tau_rise_In', final_tau_decay_In');
+T = cell2table(True_values);
+
+% Let's see some statistics
+func1 = @(x) mean(x);
+func2 = @(x) std(x);
+
+table_ff1(1,:) = varfun(func1,T1_f);
+table_ff1(2,:) = varfun(func2,T1_f);
+
+T.Properties.VariableNames = {'Max conductance Chloride', 'Tau rise In', 'Tau Decay In'};
+table_ff1.Properties.VariableNames = {'Max conductance Chloride', 'Tau rise In', 'Tau Decay In'};
+
+table_ff1 = [T;table_ff1];
+
+% In the first row, we see the true values we would want to get with our
+% fit. In the second row, we see the average values we get with our fit in
+% all the iterations we did. In the third row we look at standard
+% deviation 
+table_ff1.Properties.RowNames = {'True value','Mean','Std'};
