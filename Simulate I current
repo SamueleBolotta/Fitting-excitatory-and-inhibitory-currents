@@ -1,0 +1,13 @@
+function [IPSC, t] = generate_I(G_max_Chl, Tau_Rise_In, Tau_Decay_In, tmax)
+
+%% This function simulates an I current
+    
+    dt = 0.1;                               % time step duration (ms)
+    t = 0:dt:tmax-dt;
+    Vm = 0;
+    EChl = -70;
+
+    % Compute inhibitory current 
+    IPSC = ((G_max_Chl) .* ((1 - exp(-t / Tau_Rise_In)) .* exp(-t / Tau_Decay_In)) * (Vm - EChl));
+    
+end
