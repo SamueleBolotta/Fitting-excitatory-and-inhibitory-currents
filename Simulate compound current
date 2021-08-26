@@ -1,16 +1,16 @@
-function [EPSC, IPSC, CPSC, t] = generate_current(G_max_chl, G_max_glu, EGlu, EChl, Vm, tau_rise_In, tau_decay_In, tau_rise_Ex, tau_decay_Ex,tmax)
-    
+function [EPSC, IPSC, CPSC, t] = generate_current(Gi, Ge, EGlu, EChl, Vm, tau_rise_i, tau_decay_i, tau_rise_e, tau_decay_e,tmax)
+
 % This function simulates compound current
 
-    dt = 0.1;                               % time step duration (ms)
-    t = 0:dt:tmax-dt;
-    
-    % Compute compound current
-    
-    IPSC = ((G_max_chl) .* ((1 - exp(-t / tau_rise_In)) .* exp(-t / tau_decay_In)) * (Vm - EChl));
-    
-    EPSC = ((G_max_glu) .* ((1 - exp(-t / tau_rise_Ex)) .* exp(-t / tau_decay_Ex)) * (Vm - EGlu));
-    
-    CPSC = IPSC + EPSC;
-    
+dt = 0.1;                               % time step duration (ms)
+t = 0:dt:tmax-dt;
+
+% Compute compound current
+
+IPSC = ((Gi) .* ((tau_rise_i * tau_decay_i / (tau_rise_i - tau_decay_i)) * ((exp(-t / tau_rise_i)) - exp(-t / tau_decay_i))) * (Vm - EChl));
+
+EPSC = ((Ge) .* ((tau_rise_e * tau_decay_e / (tau_rise_e - tau_decay_e)) * ((exp(-t / tau_rise_e)) - exp(-t / tau_decay_e))) * (Vm - EGlu));
+
+CPSC = IPSC + EPSC;
+
 end
