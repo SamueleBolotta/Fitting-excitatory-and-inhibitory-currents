@@ -1,102 +1,118 @@
 clear
+close all
 
 % Membrane potential
-Vm = -5;
+Vm = -50;
 
-% Level of noise
-l_n = 40;
+% Old or new fit
+newf = true;
+ln = 15;
 
-% Generate simulated data and add noise
-[EPSC,IPSC,CPSC,t] = generate_current(140,20,0,-70,Vm,0.2,8,1.5,3,60);
+truegi = 50;
+truege = 30;
+truetre = 0.7;
+truetdi = 6.2;
+truetri = 3.7;
+truetde = 2.2;
+
+% Generate data and add noise
+[EPSC,IPSC,CPSC,t] = generate_current(truegi,truege,0,-70,Vm,truetri, truetdi, truetre, truetde,60);
 
 % True values for comparison with fit
-True_values = {140,20,3,8,1.5,0.2};
+True_values = {truegi,truege,truetde,truetdi,truetre,truetri};
 
 % Create table
 Table_True = cell2table(True_values,'VariableNames',{'Fun_Max conductance Chloride','Fun_Max conductance Glutamate', 'Fun_Tau Decay Ex', 'Fun_Tau decay In', 'Fun_Tau rise Ex', 'Fun_Tau rise In'});
 
 % Initial values for fitting
-gmc = 40; gmg = 80; tde = 0.2; tdi = 8; tre = 1.56; tri = 3;
+gmc = 1 + (150-1) .* rand(1,1); gmg = 1 + (150-1) .* rand(1,1); tde = truetde + truetde * 0.1; tdi = truetdi + truetdi * 0.25; tre = truetre + truetre * 0.2; tri = truetri + truetri * 0.2;
+lower_tde = tde - (tde * 0.3); lower_tdi = tdi - (tdi * 0.3); lower_tre = tre - (tre * 0.3); lower_tri = tri - (tri * 0.3);
+upper_tde = tde + (tde * 0.3); upper_tdi = tdi + (tdi * 0.3); upper_tre = tre + (tre * 0.3); upper_tri = tri + (tri * 0.3);
 
-zmax = 70; % number of iterations
+zmax = 200; % number of iterations
 
 %Preallocation
-final_Chl = zeros(1,zmax);
-final_Glu = zeros(1,zmax);
-final_tau_decay_ex = zeros(1,zmax);
-final_tau_decay_in = zeros(1,zmax);
-final_tau_rise_ex = zeros(1,zmax);
-final_tau_rise_in = zeros(1,zmax);
+final_Gi = zeros(1,zmax);
+final_Ge = zeros(1,zmax);
+final_tau_decay_e = zeros(1,zmax);
+final_tau_decay_i = zeros(1,zmax);
+final_tau_rise_e = zeros(1,zmax);
+final_tau_rise_i = zeros(1,zmax);
+sse = zeros(1,zmax);
+rsquare = zeros(1,zmax);
+adjrsquare = zeros(1,zmax);
+rmse = zeros(1,zmax);
 
 % zmax iterations
 for z = 1:zmax
     
     %% Fit model to data
     % Apply white noise to the CPSC
-    y = awgn(CPSC,l_n,'measured');
+    y = awgn(CPSC,ln,'measured');
     
     %% Perform fit
     [xData, yData] = prepareCurveData(t, y);
     % Set up fittype and options.
-    ft = fittype( '((G_max_chl) .* ((1 - exp(-t / tau_rise_In)) .* exp(-t / tau_decay_In)) * (Vm - EChl)) + ((G_max_glu) .* ((1 - exp(-t / tau_rise_Ex)) .* exp(-t / tau_decay_Ex)) * (Vm - EGlu))', 'independent', 't', 'dependent', 'y' );
-    opts = fitoptions( 'Method', 'NonlinearLeastSquares', 'MaxIter', 5000);
-    opts.Display = 'notify';
+    ft = fittype( '((Ge) .* (tau_rise_e * tau_decay_e / (tau_rise_e - tau_decay_e)) * ((exp(-t / tau_rise_e)) - exp(-t / tau_decay_e)) * (Vm - EGlu)) + ((Gi) .* (tau_rise_i * tau_decay_i / (tau_rise_i - tau_decay_i)) * ((exp(-t / tau_rise_i)) - exp(-t / tau_decay_i)) * (Vm - EChl))', 'independent', 't', 'dependent', 'y' );
+    opts = fitoptions( 'Method', 'NonlinearLeastSquares', 'MaxIter', 50000);
     
-    % At first iteration only, we plot what's going on to get an idea
-    if z == 1
-                
-        opts.Lower      = [-70 0 1   1   Vm 2.4 6.4 1.26 0.16];
-        opts.StartPoint = [-70 0 gmc gmg Vm tri tdi tre tde]; % Starting values
-        opts.Upper      = [-70 0 150 150 Vm 3.6 9.6 1.86 0.24];
-        
-        [fitresult1, gof1] = fit(xData, yData, ft, opts); % Fit
-        
-        %Store values
-        final_Chl(z) = fitresult1.G_max_chl;
-        final_Glu(z) = fitresult1.G_max_glu;
-        final_tau_decay_ex(z) = fitresult1.tau_decay_Ex;
-        final_tau_decay_in(z) = fitresult1.tau_decay_In;
-        final_tau_rise_ex(z) = fitresult1.tau_rise_Ex;
-        final_tau_rise_in(z) = fitresult1.tau_rise_In;
-        
-        % Plot the fit vs the true values
-        IPSC_fit = ((fitresult1.G_max_chl) .* ((1 - exp(-t / fitresult1.tau_rise_In)) .* exp(-t / fitresult1.tau_decay_In)) * (fitresult1.Vm - fitresult1.EChl));
-        EPSC_fit = ((fitresult1.G_max_glu) .* ((1 - exp(-t / fitresult1.tau_rise_Ex)) .* exp(-t / fitresult1.tau_decay_Ex)) * (fitresult1.Vm - fitresult1.EGlu));
-        CPSC_fit = IPSC_fit + EPSC_fit;
-        
-        plots
-        
-    else
-        
-        opts.Lower      = [-70 0 1   1   Vm 2.4 6.4 1.26 0.16];
-        opts.StartPoint = [-70 0 gmc gmg Vm tri tdi tre tde]; % Starting values
-        opts.Upper      = [-70 0 150 150 Vm 3.6 9.6 1.86 0.24];
-        
-        [fitresult1, gof1] = fit(xData, yData, ft, opts); % Fit
-        
-        % Store values
-        final_Chl(z) = fitresult1.G_max_chl;
-        final_Glu(z) = fitresult1.G_max_glu;
-        final_tau_decay_ex(z) = fitresult1.tau_decay_Ex;
-        final_tau_decay_in(z) = fitresult1.tau_decay_In;
-        final_tau_rise_ex(z) = fitresult1.tau_rise_Ex;
-        final_tau_rise_in(z) = fitresult1.tau_rise_In;
-    end
+    
+    opts.Lower      = [-70 0 1   1   Vm lower_tde lower_tdi lower_tre lower_tri];
+    opts.StartPoint = [-70 0 gmc gmg Vm tde tdi tre tri]; % Starting values
+    opts.Upper      = [-70 0 150 150 Vm upper_tde upper_tdi upper_tre upper_tri];
+    
+    [fitresult1, gof1] = fit(xData, yData, ft, opts) % Fit
+    
+    %Store values
+    final_Gi(z) = fitresult1.Gi;
+    final_Ge(z) = fitresult1.Ge;
+    final_tau_decay_e(z) = fitresult1.tau_decay_e;
+    final_tau_decay_i(z) = fitresult1.tau_decay_i;
+    final_tau_rise_e(z) = fitresult1.tau_rise_e;
+    final_tau_rise_i(z) = fitresult1.tau_rise_i;
+    sse(z) = gof1.sse;
+    rsquare(z) = gof1.rsquare;
+    adjrsquare(z) = gof1.adjrsquare;
+    rmse(z) = gof1.rmse;
+    
+    % Plot the fit vs the true values
+    IPSC_fit = ((fitresult1.Gi) .* (fitresult1.tau_rise_i * fitresult1.tau_decay_i / (fitresult1.tau_rise_i - fitresult1.tau_decay_i)) * ((exp(-t / fitresult1.tau_rise_i)) - exp(-t / fitresult1.tau_decay_i)) * (Vm - fitresult1.EChl));
+    EPSC_fit = ((fitresult1.Ge) .* (fitresult1.tau_rise_e * fitresult1.tau_decay_e / (fitresult1.tau_rise_e - fitresult1.tau_decay_e)) * ((exp(-t / fitresult1.tau_rise_e)) - exp(-t / fitresult1.tau_decay_e)) * (Vm - fitresult1.EGlu));
+    CPSC_fit = IPSC_fit + EPSC_fit;
+    
+    %% Plot fit with data
+    %         figure
+    %         set(gcf,'color','w');
+    %         subplot(3,1,1)
+    %         plot(t,y)
+    %         hold on
+    %         plot(t,CPSC_fit)
+    %         formatSpec = 'Compound current at %d Vm';
+    %         A1 = Vm;
+    %         str = sprintf(formatSpec,A1);
+    %         title(str)
+    %         legend("Recorded","Fit")
+    %         xlabel('Time (ms)')
+    %         ylabel("Current (pA)")
+    
+    %         subplot(3,1,2)
+    %         plot(t,IPSC)
+    %         hold on
+    %         plot(t,IPSC_fit)
+    %         title("Inhibitory current")
+    %         legend("Recorded","Fit")
+    %         xlabel('Time (ms)')
+    %         ylabel("Current (pA)")
+    %
+    %         subplot(3,1,3)
+    %         plot(t,EPSC)
+    %         hold on
+    % %         plot(t,EPSC_fit)
+    % %         title("Excitatory current")
+    % %         legend("Recorded","Fit")
+    % %         xlabel('Time (ms)')
+    %         ylabel("Current (pA)")
+    
+    
 end
 
-% Create table with fitting values for all iterations
-Table_Fit = table(final_Chl',final_Glu',final_tau_decay_ex',final_tau_decay_in',...
-    final_tau_rise_ex',final_tau_rise_in');
-
-Table_Fit.Properties.VariableNames = {'Max conductance Chloride','Max conductance Glutamate', 'Tau Decay Ex', 'Tau decay In', 'Tau rise Ex', 'Tau rise In'};
-
-% Stats
-func1 = @(x) mean(x);
-func2 = @(x) std(x);
-
-Table_Final(1,:) = varfun(func1,Table_Fit);
-Table_Final(2,:) = varfun(func2,Table_Fit);
-Table_Final = [Table_True;Table_Final];
-Table_Final.Properties.RowNames = {'True value','Mean','Std'};
-
-clear True_values z zmax Table_True
