@@ -10,5 +10,5 @@ to constrain the fit for the compound current problem.
 - "Fit inhibitory current". This script will fit a simulated inhibitory current, generated with "Simulate I current". You'll get accurate values that you'll later use
 to constrain the fit for the compound current problem.
 
-- "Fit compound current". This script will try to solve the hardest problem: fitting a simulated compound current, generated with "Simulate compound current". It'll use 
+- "Fit compound current". This script will try to fit a simulated compound current, generated with "Simulate compound current". It'll use 
 information from the previous two fits to be as accurate as possible.
